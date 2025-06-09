@@ -1,0 +1,51 @@
+name: export-add-commit-and-push-solution-to-branch
+
+on:
+   workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+        
+      - name: who-am-i action
+        uses: microsoft/powerplatform-actions/who-am-i@v0
+        with:
+          environment-url: 'https://org90095d15.crm.dynamics.com'
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+        
+      - name: Install Power Platform Tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Export Solution
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: 'https://org90095d15.crm.dynamics.com'
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-name: GitHubDemo
+          solution-output-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
+
+      - name: Unpack Solution
+        uses: microsoft/powerplatform-actions/unpack-solution@v1
+        with:
+          solution-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
+          solution-folder: 'out/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          solution-type: 'Unmanaged'
+          overwrite-files: true
+
+      - name: Prepare solution changes for check-in into source control
+        uses: microsoft/powerplatform-actions/branch-solution@v1
+        with:
+          solution-folder: 'out/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          solution-target-folder: 'src/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          allow-empty-commit: true
