@@ -18,12 +18,6 @@ jobs:
       - name: Install Power Platform Tools (PAC)
         uses: microsoft/powerplatform-actions/actions-install@v1
 
-      - name: Create required directories
-        run: |
-          mkdir out
-          mkdir out/solutions
-          mkdir out/solutions/Managed
-
       - name: Pack solution as Managed
         uses: microsoft/powerplatform-actions/pack-solution@v1
         with:
