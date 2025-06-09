@@ -10,16 +10,23 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
         with:
           lfs: true
 
-      - name: Pack solution
-        uses: microsoft/powerplatform-actions/pack-solution@v0
+      - name: Create required directories
+        run: |
+          mkdir out
+          mkdir out/solutions
+          mkdir out/solutions/Managed
+
+      - name: Pack solution as Managed
+        uses: microsoft/powerplatform-actions/pack-solution@v1
         with:
           solution-folder: 'src/solutions/Unmanaged/GitHubActionsGitHubDemo'
           solution-file: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
-          solution-type: Unmanaged
+          solution-type: Managed
 
       - name: Upload artifact (store the release solution)
         uses: actions/upload-artifact@v4
@@ -34,10 +41,10 @@ jobs:
           path: out/release/
 
       - name: List downloaded files
-        run: Get-ChildItem .\out\release\
+        run: Get-ChildItem -Recurse .\out\release\
 
       - name: Import solution as Managed to production environment
-        uses: microsoft/powerplatform-actions/import-solution@v0
+        uses: microsoft/powerplatform-actions/import-solution@v1
         with:
           environment-url: 'https://org8e5dc8f7.crm.dynamics.com'
           app-id: ${{ secrets.CLIENT_ID }}
