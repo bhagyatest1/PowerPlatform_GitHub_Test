@@ -15,6 +15,9 @@ jobs:
         with:
           lfs: true
 
+      - name: Install Power Platform Tools (PAC)
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
       - name: Create required directories
         run: |
           mkdir out
@@ -52,4 +55,3 @@ jobs:
           tenant-id: ${{ secrets.TENANT_ID }}
           solution-file: 'out/release/GitHubActionsGitHubDemo.zip'
           force-overwrite: true
-          publish-changes: true
