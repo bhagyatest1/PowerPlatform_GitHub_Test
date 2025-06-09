@@ -18,19 +18,6 @@ jobs:
       - name: Install Power Platform Tools (PAC)
         uses: microsoft/powerplatform-actions/actions-install@v1
 
-      - name: Pack solution as Managed
-        uses: microsoft/powerplatform-actions/pack-solution@v1
-        with:
-          solution-folder: 'src/solutions/Unmanaged/GitHubActionsGitHubDemo'
-          solution-file: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
-          solution-type: Managed
-
-      - name: Upload artifact (store the release solution)
-        uses: actions/upload-artifact@v4
-        with:
-          name: managedSolutions
-          path: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
-
       - name: Fetch the ready-to-ship solution from GitHub artifact store
         uses: actions/download-artifact@v4
         with:
@@ -49,3 +36,4 @@ jobs:
           tenant-id: ${{ secrets.TENANT_ID }}
           solution-file: 'out/release/GitHubActionsGitHubDemo.zip'
           force-overwrite: true
+          publish-changes: true
