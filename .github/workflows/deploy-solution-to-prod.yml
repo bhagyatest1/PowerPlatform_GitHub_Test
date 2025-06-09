@@ -1,0 +1,47 @@
+name: deploy-solution-to-prod
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  deploy-solution:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        lfs: true
+
+    - name: Pack solution
+      uses: microsoft/powerplatform-actions/pack-solution@v0
+      with:
+        solution-folder: 'src/solutions/Unmanaged/GitHubActionsGitHubDemo'
+        solution-file: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
+        solution-type: Unmanaged
+
+    - name: Upload artifact store the release solution
+      uses: actions/upload-artifact@v2
+      with:
+        name: managedSolutions
+        path: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
+        
+    - name: Fetch the ready to ship solution from GH artifact store
+      uses: actions/download-artifact@v2
+      with:
+        name: managedSolutions
+        path: out/release/
+
+    - run: get-childitem .\out\release\
+    
+    - name: Import solution as Managed to production environment
+      uses: microsoft/powerplatform-actions/import-solution@v0
+      with:
+        environment-url: 'https://org8e5dc8f7.crm.dynamics.com'
+        app-id: ${{ secrets.CLIENT_ID }}
+        client-secret: ${{ secrets.CLIENT_SECRET }}
+        tenant-id: ${{ secrets.TENANT_ID }}
+        solution-file: 'out/solutions/Managed/GitHubActionsGitHubDemo.zip'
+        force-overwrite: true
+        publish-changes: true
