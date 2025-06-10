@@ -1,4 +1,4 @@
-name: release-solution-to-prod-reusable
+name: deploy-solution-to-prod
 
 on:
   workflow_call:
