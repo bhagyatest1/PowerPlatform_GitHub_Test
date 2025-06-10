@@ -1,0 +1,96 @@
+name: export-and-branch-solution
+# Export solution from DEV environment
+# unpack it and prepare, commit and push a git branch with the changes
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Editable: change this value if needed
+      solution_name:
+        description: 'Name of the solution to work on from Power Platform'
+        required: true
+        default: GitHubDemo
+
+      # Do not change these
+      solution_exported_folder:
+        description: 'Folder name for staging the exported solution *do not change*'
+        required: true
+        default: out/Unmanaged
+
+      solution_folder:
+        description: 'Staging the unpacked solution folder before check-in *do not change*'
+        required: true
+        default: out/solutions/Unmanaged
+
+      solution_target_folder: 
+        description: 'Folder name to be created and checked in *do not change*'
+        required: true
+        default: src/solutions/Unmanaged
+
+env:
+  ENVIRONMENT_URL: 'https://org90095d15.crm.dynamics.com'
+  CLIENT_ID: ${{ secrets.CLIENT_ID }}
+  TENANT_ID: ${{ secrets.TENANT_ID }}
+
+permissions:
+  contents: write
+
+jobs:
+  export-from-dev:
+    runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v2
+      with:
+        lfs: true
+
+    - name: 🗂️ Create output directories
+      run: |
+        mkdir -p "${{ github.event.inputs.solution_exported_folder }}"
+        mkdir -p "${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}"
+        mkdir -p "${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}"
+
+    - name: 🔐 Who am I
+      uses: microsoft/powerplatform-actions/who-am-i@v0
+      with:
+        environment-url: ${{ env.ENVIRONMENT_URL }}
+        app-id: ${{ env.CLIENT_ID }}
+        client-secret: ${{ secrets.CLIENT_SECRET }}
+        tenant-id: ${{ env.TENANT_ID }}
+
+    - name: 📤 Export solution
+      uses: microsoft/powerplatform-actions/export-solution@v1
+      with:
+        environment-url: ${{ env.ENVIRONMENT_URL }}
+        app-id: ${{ env.CLIENT_ID }}
+        client-secret: ${{ secrets.CLIENT_SECRET }}
+        tenant-id: ${{ env.TENANT_ID }}
+        solution-name: ${{ github.event.inputs.solution_name }}
+        solution-output-file: ${{ github.event.inputs.solution_exported_folder }}/${{ github.event.inputs.solution_name }}.zip
+
+    - name: 📦 Unpack solution
+      uses: microsoft/powerplatform-actions/unpack-solution@v1
+      with:
+        solution-file: ${{ github.event.inputs.solution_exported_folder }}/${{ github.event.inputs.solution_name }}.zip
+        solution-folder: ${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}
+        solution-type: 'Unmanaged'
+        overwrite-files: true
+
+    - name: 🧹 Branch and prepare for Git
+      uses: microsoft/powerplatform-actions/branch-solution@v0
+      with:
+        solution-folder: ${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}
+        solution-target-folder: ${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        allow-empty-commit: true
+
+    - name: ✅ Commit and push solution changes
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}"
+        git commit -m "📦 Exported and prepared solution: ${{ github.event.inputs.solution_name }}" || echo "No changes to commit"
+        git push origin HEAD:${{ github.ref_name }}
