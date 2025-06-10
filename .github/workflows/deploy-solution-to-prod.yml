@@ -1,39 +1,131 @@
-name: deploy-solution-to-prod
+name: release-solution-to-prod-reusable
 
 on:
-  workflow_dispatch:
-  release:
-    types: [created]
+  workflow_call:
+    inputs: 
+      solution_name:
+        description: 'The solution name.'
+        type: string
+        default: GitHubDemo       
+
+      solution_shipping_folder:
+        description: 'Folder name to stage the managed solution for deployment.'
+        type: string
+        default: out/ship
+
+      solution_outbound_folder:
+        description: 'Intermediate location of the packed unmanaged solution.'
+        type: string
+        default: out/solutions
+
+      solution_source_folder: 
+        description: 'Folder path where the source solution lives in repo.'
+        type: string
+        default: src/solutions
+
+      solution_release_folder:
+        description: 'Location to extract GH artifacts before PROD import.'
+        type: string
+        default: out/release
+
+      BUILD_ENVIRONMENT_URL:
+        description: 'Build (conversion) environment URL.'
+        type: string
+        required: true      
+
+      PRODUCTION_ENVIRONMENT_URL: 
+        description: 'Production environment URL.'
+        type: string
+        required: true
+        default: https://org8e5dc8f7.crm.dynamics.com
+
+      CLIENT_ID: 
+        description: 'Azure app (SPN) client ID.'
+        type: string
+        required: true
+
+      TENANT_ID: 
+        description: 'Azure tenant ID.'
+        type: string
+        required: true
+
+    secrets:
+      envSecret:
+        description: 'Client secret for the SPN.'
+        required: true
 
 jobs:
-  deploy-solution:
+  convert-to-managed:
     runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: 📥 Checkout source
+        uses: actions/checkout@v2
         with:
           lfs: true
 
-      - name: Install Power Platform Tools (PAC)
-        uses: microsoft/powerplatform-actions/actions-install@v1
-
-      - name: Fetch the ready-to-ship solution from GitHub artifact store
-        uses: actions/download-artifact@v4
+      - name: 📦 Pack unmanaged solution from source folder
+        uses: microsoft/powerplatform-actions/pack-solution@v1
         with:
-          name: managedSolutions
-          path: out/release/
+          solution-folder: "${{ inputs.solution_source_folder }}/${{ inputs.solution_name }}"
+          solution-file: "${{ inputs.solution_outbound_folder }}/${{ inputs.solution_name }}.zip"
+          solution-type: Unmanaged
 
-      - name: List downloaded files
-        run: Get-ChildItem -Recurse .\out\release\
-
-      - name: Import solution as Managed to production environment
+      - name: 📤 Import unmanaged solution into build environment
         uses: microsoft/powerplatform-actions/import-solution@v1
         with:
-          environment-url: 'https://org8e5dc8f7.crm.dynamics.com'
-          app-id: ${{ secrets.CLIENT_ID }}
-          client-secret: ${{ secrets.CLIENT_SECRET }}
-          tenant-id: ${{ secrets.TENANT_ID }}
-          solution-file: 'out/release/GitHubActionsGitHubDemo.zip'
+          environment-url: "${{ inputs.BUILD_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}"
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-file: "${{ inputs.solution_outbound_folder }}/${{ inputs.solution_name }}.zip"
+          force-overwrite: true
+          publish-changes: true
+
+      - name: 🛠 Export solution as managed
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: "${{ inputs.BUILD_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}" 
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-name: "${{ inputs.solution_name }}"
+          managed: true
+          solution-output-file: "${{ inputs.solution_shipping_folder }}/${{ inputs.solution_name }}_managed.zip"
+
+      - name: 🗃 Upload managed solution as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: managedSolutions
+          path: "${{ inputs.solution_shipping_folder }}"
+
+  release-to-prod:
+    needs: [convert-to-managed]
+    runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: 📦 Download managed solution from artifact store
+        uses: actions/download-artifact@v3
+        with:
+          name: managedSolutions
+          path: "${{ inputs.solution_release_folder }}"
+
+      - name: 🚀 Import managed solution into PROD
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: "${{ inputs.PRODUCTION_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}"
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-file: "${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip"
           force-overwrite: true
           publish-changes: true
