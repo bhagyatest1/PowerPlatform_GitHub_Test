@@ -1,96 +1,136 @@
-name: export-and-branch-solution
-# Export solution from DEV environment
-# unpack it and prepare, commit and push a git branch with the changes
+name: export-and-branch-solution-with-spn-auth
 
 on:
-  workflow_dispatch:
-    inputs:
-      # Editable: change this value if needed
+  workflow_call:
+    inputs: 
       solution_name:
-        description: 'Name of the solution to work on from Power Platform'
+        description: 'The solution name.'
+        type: string
+        default: GitHubDemo       
+
+      solution_shipping_folder:
+        description: 'Folder name to stage the managed solution for deployment.'
+        type: string
+        default: out/ship
+
+      solution_outbound_folder:
+        description: 'Intermediate location of the packed unmanaged solution.'
+        type: string
+        default: out/solutions
+
+      solution_source_folder: 
+        description: 'Folder path where the source solution lives in repo.'
+        type: string
+        default: src/solutions
+
+      solution_release_folder:
+        description: 'Location to extract GH artifacts before PROD import.'
+        type: string
+        default: out/release
+
+      BUILD_ENVIRONMENT_URL:
+        description: 'Build (conversion) environment URL.'
+        type: string
+        required: true      
+
+      PRODUCTION_ENVIRONMENT_URL: 
+        description: 'Production environment URL.'
+        type: string
         required: true
-        default: GitHubDemo
+        default: https://org8e5dc8f7.crm.dynamics.com
 
-      # Do not change these
-      solution_exported_folder:
-        description: 'Folder name for staging the exported solution *do not change*'
+      CLIENT_ID: 
+        description: 'Azure app (SPN) client ID.'
+        type: string
         required: true
-        default: out/Unmanaged
 
-      solution_folder:
-        description: 'Staging the unpacked solution folder before check-in *do not change*'
+      TENANT_ID: 
+        description: 'Azure tenant ID.'
+        type: string
         required: true
-        default: out/solutions/Unmanaged
 
-      solution_target_folder: 
-        description: 'Folder name to be created and checked in *do not change*'
+    secrets:
+      envSecret:
+        description: 'Client secret for the SPN.'
         required: true
-        default: src/solutions/Unmanaged
-
-env:
-  ENVIRONMENT_URL: 'https://org90095d15.crm.dynamics.com'
-  CLIENT_ID: ${{ secrets.CLIENT_ID }}
-  TENANT_ID: ${{ secrets.TENANT_ID }}
-
-permissions:
-  contents: write
 
 jobs:
-  export-from-dev:
+  convert-to-managed:
     runs-on: windows-latest
     env:
       RUNNER_DEBUG: 1
 
     steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v2
-      with:
-        lfs: true
+      - name: 📥 Checkout source
+        uses: actions/checkout@v2
+        with:
+          lfs: true
 
-    - name: 🗂️ Create output directories
-      run: |
-        mkdir -p "${{ github.event.inputs.solution_exported_folder }}"
-        mkdir -p "${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}"
-        mkdir -p "${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}"
+      - name: 📦 Pack unmanaged solution from source folder
+        uses: microsoft/powerplatform-actions/pack-solution@v1
+        with:
+          solution-folder: "${{ inputs.solution_source_folder }}/${{ inputs.solution_name }}"
+          solution-file: "${{ inputs.solution_outbound_folder }}/${{ inputs.solution_name }}.zip"
+          solution-type: Unmanaged
 
-    - name: 🔐 Who am I
-      uses: microsoft/powerplatform-actions/who-am-i@v0
-      with:
-        environment-url: ${{ env.ENVIRONMENT_URL }}
-        app-id: ${{ env.CLIENT_ID }}
-        client-secret: ${{ secrets.CLIENT_SECRET }}
-        tenant-id: ${{ env.TENANT_ID }}
+      - name: 📤 Import unmanaged solution into build environment
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: "${{ inputs.BUILD_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}"
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-file: "${{ inputs.solution_outbound_folder }}/${{ inputs.solution_name }}.zip"
+          force-overwrite: true
+          publish-changes: true
 
-    - name: 📤 Export solution
-      uses: microsoft/powerplatform-actions/export-solution@v1
-      with:
-        environment-url: ${{ env.ENVIRONMENT_URL }}
-        app-id: ${{ env.CLIENT_ID }}
-        client-secret: ${{ secrets.CLIENT_SECRET }}
-        tenant-id: ${{ env.TENANT_ID }}
-        solution-name: ${{ github.event.inputs.solution_name }}
-        solution-output-file: ${{ github.event.inputs.solution_exported_folder }}/${{ github.event.inputs.solution_name }}.zip
+      - name: 🛠 Export solution as managed
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: "${{ inputs.BUILD_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}" 
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-name: "${{ inputs.solution_name }}"
+          managed: true
+          solution-output-file: "${{ inputs.solution_shipping_folder }}/${{ inputs.solution_name }}_managed.zip"
 
-    - name: 📦 Unpack solution
-      uses: microsoft/powerplatform-actions/unpack-solution@v1
-      with:
-        solution-file: ${{ github.event.inputs.solution_exported_folder }}/${{ github.event.inputs.solution_name }}.zip
-        solution-folder: ${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}
-        solution-type: 'Unmanaged'
-        overwrite-files: true
+      - name: 🔍 Check managed solution file exists
+        run: |
+          echo "Listing contents of ${{ inputs.solution_shipping_folder }}"
+          dir "${{ inputs.solution_shipping_folder }}"
 
-    - name: 🧹 Branch and prepare for Git
-      uses: microsoft/powerplatform-actions/branch-solution@v0
-      with:
-        solution-folder: ${{ github.event.inputs.solution_folder }}/${{ github.event.inputs.solution_name }}
-        solution-target-folder: ${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        allow-empty-commit: true
+      - name: 🗃 Upload managed solution as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: managedSolutions
+          path: "${{ inputs.solution_shipping_folder }}/${{ inputs.solution_name }}_managed.zip"
 
-    - name: ✅ Commit and push solution changes
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "${{ github.event.inputs.solution_target_folder }}/${{ github.event.inputs.solution_name }}"
-        git commit -m "📦 Exported and prepared solution: ${{ github.event.inputs.solution_name }}" || echo "No changes to commit"
-        git push origin HEAD:${{ github.ref_name }}
+  release-to-prod:
+    needs: [convert-to-managed]
+    runs-on: windows-latest
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: 📦 Download managed solution from artifact store
+        uses: actions/download-artifact@v3
+        with:
+          name: managedSolutions
+          path: "${{ inputs.solution_release_folder }}"
+
+      - name: 🚀 Import managed solution into PROD
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: "${{ inputs.PRODUCTION_ENVIRONMENT_URL }}"
+          app-id: "${{ inputs.CLIENT_ID }}"
+          client-secret: "${{ secrets.envSecret }}"
+          tenant-id: "${{ inputs.TENANT_ID }}"
+          solution-file: "${{ inputs.solution_release_folder }}/${{ inputs.solution_name }}_managed.zip"
+          force-overwrite: true
+          publish-changes: true
