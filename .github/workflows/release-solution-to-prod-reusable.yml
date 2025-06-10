@@ -1,4 +1,4 @@
-name: deploy-solution-to-prod
+name: release-solution-to-prod-reusable
 
 on:
   workflow_call:
@@ -95,11 +95,16 @@ jobs:
           managed: true
           solution-output-file: "${{ inputs.solution_shipping_folder }}/${{ inputs.solution_name }}_managed.zip"
 
+      - name: 🔍 Check managed solution file exists
+        run: |
+          echo "Listing contents of ${{ inputs.solution_shipping_folder }}"
+          dir "${{ inputs.solution_shipping_folder }}"
+
       - name: 🗃 Upload managed solution as artifact
         uses: actions/upload-artifact@v3
         with:
           name: managedSolutions
-          path: "${{ inputs.solution_shipping_folder }}"
+          path: "${{ inputs.solution_shipping_folder }}/${{ inputs.solution_name }}_managed.zip"
 
   release-to-prod:
     needs: [convert-to-managed]
