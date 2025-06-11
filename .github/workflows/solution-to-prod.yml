@@ -1,4 +1,4 @@
-name: export-import-unmanaged-solution
+name: solution-to-prod
 
 on:
   workflow_dispatch:
