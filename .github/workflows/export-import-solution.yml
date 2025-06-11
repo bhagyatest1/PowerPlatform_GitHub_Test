@@ -1,0 +1,76 @@
+name: export-import-solution
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-and-import:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Create output directories
+        run: |
+          mkdir -p out/Unmanaged
+          mkdir -p out/solutions/Unmanaged/GitHubActionsGitHubDemo
+          mkdir -p src/solutions/Unmanaged/GitHubActionsGitHubDemo
+
+      - name: Install Power Platform Tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: who-am-i (Source Environment)
+        uses: microsoft/powerplatform-actions/who-am-i@v0
+        with:
+          environment-url: 'https://org90095d15.crm.dynamics.com' # Source
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+
+      - name: Export Solution
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: 'https://org90095d15.crm.dynamics.com' # Source
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-name: GitHubDemo
+          solution-output-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
+
+      - name: Unpack Solution
+        uses: microsoft/powerplatform-actions/unpack-solution@v1
+        with:
+          solution-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
+          solution-folder: 'out/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          solution-type: 'Unmanaged'
+          overwrite-files: true
+
+      - name: Prepare solution changes for check-in into source control
+        uses: microsoft/powerplatform-actions/branch-solution@v1
+        with:
+          solution-folder: 'out/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          solution-target-folder: 'src/solutions/Unmanaged/GitHubActionsGitHubDemo'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          allow-empty-commit: true
+
+      # ---------- Import to Target Environment Starts Here ----------
+
+      - name: who-am-i (Target Environment)
+        uses: microsoft/powerplatform-actions/who-am-i@v0
+        with:
+          environment-url: 'https://org8e5dc8f7.crm.dynamics.com' # Update this
+          app-id: ${{ secrets.TARGET_CLIENT_ID }}
+          client-secret: ${{ secrets.TARGET_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TARGET_TENANT_ID }}
+
+      - name: Import Solution
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: 'https://org8e5dc8f7.crm.dynamics.com' # Update this
+          app-id: ${{ secrets.TARGET_CLIENT_ID }}
+          client-secret: ${{ secrets.TARGET_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TARGET_TENANT_ID }}
+          solution-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
