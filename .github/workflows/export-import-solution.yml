@@ -1,4 +1,4 @@
-name: export-import-solution
+name: export-import-unmanaged-solution
 
 on:
   workflow_dispatch:
@@ -23,17 +23,17 @@ jobs:
         uses: microsoft/powerplatform-actions/actions-install@v1
 
       - name: who-am-i (Source Environment)
-        uses: microsoft/powerplatform-actions/who-am-i@v0
+        uses: microsoft/powerplatform-actions/who-am-i@v1
         with:
-          environment-url: 'https://org90095d15.crm.dynamics.com' # Source
+          environment-url: 'https://org90095d15.crm.dynamics.com'
           app-id: ${{ secrets.CLIENT_ID }}
           client-secret: ${{ secrets.CLIENT_SECRET }}
           tenant-id: ${{ secrets.TENANT_ID }}
 
-      - name: Export Solution
+      - name: Export Solution (Unmanaged)
         uses: microsoft/powerplatform-actions/export-solution@v1
         with:
-          environment-url: 'https://org90095d15.crm.dynamics.com' # Source
+          environment-url: 'https://org90095d15.crm.dynamics.com'
           app-id: ${{ secrets.CLIENT_ID }}
           client-secret: ${{ secrets.CLIENT_SECRET }}
           tenant-id: ${{ secrets.TENANT_ID }}
@@ -56,21 +56,21 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           allow-empty-commit: true
 
-      # ---------- Import to Target Environment Starts Here ----------
+      # ---------- Import to Target Environment ----------
 
       - name: who-am-i (Target Environment)
-        uses: microsoft/powerplatform-actions/who-am-i@v0
+        uses: microsoft/powerplatform-actions/who-am-i@v1
         with:
           environment-url: 'https://org8e5dc8f7.crm.dynamics.com' # Update this
-          app-id: ${{ secrets.TARGET_CLIENT_ID }}
-          client-secret: ${{ secrets.TARGET_CLIENT_SECRET }}
-          tenant-id: ${{ secrets.TARGET_TENANT_ID }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
 
-      - name: Import Solution
+      - name: Import Solution (Unmanaged)
         uses: microsoft/powerplatform-actions/import-solution@v1
         with:
           environment-url: 'https://org8e5dc8f7.crm.dynamics.com' # Update this
-          app-id: ${{ secrets.TARGET_CLIENT_ID }}
-          client-secret: ${{ secrets.TARGET_CLIENT_SECRET }}
-          tenant-id: ${{ secrets.TARGET_TENANT_ID }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
           solution-file: 'out/Unmanaged/GitHubActionsGitHubDemo.zip'
